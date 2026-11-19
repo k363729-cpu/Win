@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>計算機</title>
+<style>
+/* 版面：單欄，上方螢幕與按鍵，下方計算紀錄 */
+:root{
+  --bg:#eef0f5;
+  --surface:#ffffff;
+  --fg:#171b2a;
+  --muted:#5e6580;
+  --line:#d8dce8;
+  --key:#f1f3f9;
+  --key-hover:#e4e8f3;
+  --op:#dfe5fb;
+  --accent:#3347c9;
+  --accent-fg:#ffffff;
+  --danger:#b3261e;
+  --font:-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei","Segoe UI",sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#10121b;
+    --surface:#191c29;
+    --fg:#e9ecf7;
+    --muted:#9ba2bd;
+    --line:#2b3046;
+    --key:#232738;
+    --key-hover:#2d3248;
+    --op:#2a3157;
+    --accent:#8fa0ff;
+    --accent-fg:#0d1230;
+    --danger:#ff8a80;
+    color-scheme:dark;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--bg);
+  color:var(--fg);
+  font-family:var(--font);
+  font-size:16px;
+  line-height:1.5;
+  padding-block:32px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+main{max-width:400px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1{font-size:1.35rem;margin:0;letter-spacing:.02em}
+h2{font-size:.95rem;margin:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:14px}
+button{font:inherit;color:inherit}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.screen{background:var(--bg);border-radius:12px;padding:12px 14px;min-height:112px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-end;gap:2px;min-width:0}
+.l1{color:var(--muted);font-size:1rem;min-height:1.5em;max-width:100%;overflow-wrap:anywhere;text-align:right;font-variant-numeric:tabular-nums}
+.l2{font-size:2.5rem;font-weight:600;line-height:1.15;max-width:100%;overflow-wrap:anywhere;text-align:right;font-variant-numeric:tabular-nums}
+.l2.long{font-size:1.8rem}
+.l2.err{color:var(--danger);font-size:1.2rem;font-weight:500}
+
+.keys{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.keys button{
+  min-height:56px;border:0;border-radius:12px;background:var(--key);
+  font-size:1.3rem;font-weight:500;cursor:pointer;
+}
+.keys button:hover{background:var(--key-hover)}
+.keys button:active{transform:scale(.97)}
+.keys .op{background:var(--op);color:var(--accent);font-weight:600}
+.keys .op:hover{filter:brightness(.97)}
+.keys .eq{grid-column:1 / -1;background:var(--accent);color:var(--accent-fg);font-weight:700}
+.keys .eq:hover{filter:brightness(1.08)}
+
+.head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.small{border:1px solid var(--line);background:transparent;border-radius:8px;padding:5px 10px;font-size:.82rem;cursor:pointer;color:var(--muted)}
+.small:hover{background:var(--key)}
+#log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+#log li{border-bottom:1px solid var(--line)}
+#log li:last-child{border-bottom:0}
+#log button{
+  width:100%;background:transparent;border:0;text-align:right;padding:10px 4px;cursor:pointer;
+  display:flex;flex-direction:column;gap:0;border-radius:8px;
+}
+#log button:hover{background:var(--key)}
+#log .e{color:var(--muted);font-size:.85rem;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+#log .r{font-weight:600;font-size:1.1rem;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.empty{color:var(--muted);font-size:.9rem;margin:0}
+.note{color:var(--muted);font-size:.78rem;margin:0}
+#msg{min-height:1.2em;margin:0;font-size:.82rem;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}.keys button:active{transform:none}}
+</style>
+</head>
+<body>
+<main>
+  <h1>計算機</h1>
+
+  <section class="card" aria-label="計算機">
+    <div class="screen" aria-live="polite">
+      <div class="l1" id="l1"></div>
+      <div class="l2" id="l2">0</div>
+    </div>
+
+    <div class="keys" id="keys">
+      <button type="button" data-k="C" class="op" aria-label="全部清除">C</button>
+      <button type="button" data-k="(" class="op">(</button>
+      <button type="button" data-k=")" class="op">)</button>
+      <button type="button" data-k="⌫" class="op" aria-label="刪除一格">⌫</button>
+
+      <button type="button" data-k="7">7</button>
+      <button type="button" data-k="8">8</button>
+      <button type="button" data-k="9">9</button>
+      <button type="button" data-k="÷" class="op" aria-label="除">÷</button>
+
+      <button type="button" data-k="4">4</button>
+      <button type="button" data-k="5">5</button>
+      <button type="button" data-k="6">6</button>
+      <button type="button" data-k="×" class="op" aria-label="乘">×</button>
+
+      <button type="button" data-k="1">1</button>
+      <button type="button" data-k="2">2</button>
+      <button type="button" data-k="3">3</button>
+      <button type="button" data-k="−" class="op" aria-label="減">−</button>
+
+      <button type="button" data-k="0">0</button>
+      <button type="button" data-k=".">.</button>
+      <button type="button" data-k="%" class="op">%</button>
+      <button type="button" data-k="+" class="op" aria-label="加">+</button>
+
+      <button type="button" data-k="=" class="eq">=</button>
+    </div>
+
+    <div class="head">
+      <button type="button" class="small" id="copy">複製結果</button>
+      <p id="msg" role="status"></p>
+    </div>
+    <p class="note">可直接用鍵盤輸入，Enter 計算，Esc 清除。% 代表除以 100，例如 50×10% = 5。</p>
+  </section>
+
+  <section class="card" aria-label="計算紀錄">
+    <div class="head">
+      <h2>計算紀錄</h2>
+      <button type="button" class="small" id="clearLog">清除紀錄</button>
+    </div>
+    <p class="empty" id="empty">還沒有紀錄。按 = 之後會顯示在這裡，點一筆可以接著算。</p>
+    <ul id="log"></ul>
+  </section>
+</main>
+
+<script>
+(function(){
+  var expr = "";          // 目前輸入的算式（內部用 − × ÷）
+  var done = false;       // 剛按過 =
+  var error = "";         // 錯誤訊息
+  var lastExpr = "";      // 上一次計算的算式（顯示用）
+  var resultText = "";    // 上一次計算的結果文字
+  var log = [];
+  try {
+    log = JSON.parse(localStorage.getItem("calc-log") || "[]");
+    if (!Array.isArray(log)) log = [];
+  } catch (e) { log = []; }
+
+  var $ = function(id){ return document.getElementById(id); };
+  var OPS = "+−×÷";
+
+  function isDigit(c){ return c >= "0" && c <= "9"; }
+  function isOp(c){ return c !== "" && OPS.indexOf(c) >= 0; }
+
+  // 千分位顯示
+  function pretty(s){
+    return s.replace(/\d+(\.\d*)?/g, function(m){
+      var p = m.split(".");
+      p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      return p.join(".");
+    });
+  }
+
+  // 計算：遞迴下降解析，不使用 eval
+  function evaluate(src){
+    var s = src.replace(/[+−×÷(]+$/, "");
+    if (!s) return null;
+    var open = 0, i;
+    for (i = 0; i < s.length; i++){
+      if (s[i] === "(") open++;
+      else if (s[i] === ")"){
+        open--;
+        if (open < 0) throw new Error("括號不成對");
+      }
+    }
+    while (open-- > 0) s += ")";
+    var tokens = s.match(/\d+\.?\d*|\.\d+|[+−×÷()%]/g) || [];
+    var p = 0;
+    function peek(){ return tokens[p]; }
+    function expression(){
+      var v = term();
+      while (peek() === "+" || peek() === "−"){
+        var o = tokens[p++];
+        var r = term();
+        v = (o === "+") ? v + r : v - r;
+      }
+      return v;
+    }
+    function term(){
+      var v = factor();
+      while (peek() === "×" || peek() === "÷"){
+        var o = tokens[p++];
+        var r = factor();
+        if (o === "×") v *= r;
+        else {
+          if (r === 0) throw new Error("無法除以零");
+          v /= r;
+        }
+      }
+      return v;
+    }
+    function factor(){
+      var t = peek();
+      if (t === "−"){ p++; return -factor(); }
+      if (t === "+"){ p++; return factor(); }
+      return primary();
+    }
+    function primary(){
+      var t = tokens[p++], v;
+      if (t === "("){
+        v = expression();
+        if (tokens[p++] !== ")") throw new Error("括號不成對");
+      } else if (t !== undefined && /^[\d.]/.test(t)){
+        v = parseFloat(t);
+      } else {
+        throw new Error("算式不完整");
+      }
+      while (peek() === "%"){ p++; v /= 100; }
+      return v;
+    }
+    var val = expression();
+    if (p < tokens.length) throw new Error("算式不完整");
+    if (!isFinite(val)) throw new Error("結果超出範圍");
+    return parseFloat(val.toPrecision(12));
+  }
+
+  function formatNum(v){
+    if (v === 0) return "0";
+    var a = Math.abs(v);
+    if (a >= 1e15 || a < 1e-10){
+      return v.toExponential(6).replace(/\.?0+e/, "e");
+    }
+    return v.toLocaleString("en-US", {useGrouping:false, maximumFractionDigits:10});
+  }
+
+  function tryEval(){
+    try { return evaluate(expr); } catch (e) { return null; }
+  }
+
+  function render(){
+    var l1 = $("l1"), l2 = $("l2");
+    l2.className = "l2";
+    if (error){
+      l1.textContent = pretty(expr);
+      l2.textContent = error;
+      l2.className = "l2 err";
+      return;
+    }
+    if (done){
+      l1.textContent = pretty(lastExpr) + " =";
+      l2.textContent = pretty(resultText);
+    } else {
+      var hasOp = /[+−×÷()%]/.test(expr);
+      if (hasOp){
+        l1.textContent = pretty(expr);
+        var v = tryEval();
+        l2.textContent = (v === null) ? "\u00a0" : pretty(formatNum(v));
+      } else {
+        l1.textContent = "";
+        l2.textContent = pretty(expr) || "0";
+      }
+    }
+    if (l2.textContent.length > 11) l2.className = "l2 long";
+  }
+
+  function input(k){
+    error = "";
+    if (done){
+      if (/[0-9.(]/.test(k)) expr = "";
+      done = false;
+    }
+    var last = expr.slice(-1);
+    var cur = (expr.match(/[0-9.]*$/) || [""])[0];
+
+    if (isDigit(k)){
+      if (last === ")" || last === "%") expr += "×";
+      else if (cur === "0") expr = expr.slice(0, -1);
+      expr += k;
+    } else if (k === "."){
+      if (last === ")" || last === "%") expr += "×";
+      cur = (expr.match(/[0-9.]*$/) || [""])[0];
+      if (cur.indexOf(".") >= 0) return;
+      if (cur === "") expr += "0";
+      expr += ".";
+    } else if (isOp(k)){
+      if (expr === "" || last === "("){
+        if (k === "−") expr += k;
+      } else if (isOp(last)){
+        if (k === "−" && (last === "×" || last === "÷")) expr += k;
+        else {
+          expr = expr.replace(/[+−×÷]+$/, "");
+          if (expr !== "" && expr.slice(-1) !== "(") expr += k;
+          else if (k === "−") expr += k;
+        }
+      } else {
+        expr += k;
+      }
+    } else if (k === "("){
+      if (isDigit(last) || last === "." || last === ")" || last === "%") expr += "×";
+      expr += "(";
+    } else if (k === ")"){
+      var o = (expr.match(/\(/g) || []).length, c = (expr.match(/\)/g) || []).length;
+      if (o > c && last !== "" && !isOp(last) && last !== "(") expr += ")";
+    } else if (k === "%"){
+      if (isDigit(last) || last === ")" || last === "%") expr += "%";
+    }
+    render();
+  }
+
+  function equals(){
+    if (expr === "") return;
+    try {
+      var v = evaluate(expr);
+      if (v === null) throw new Error("算式不完整");
+      var text = formatNum(v);
+      lastExpr = expr;
+      resultText = text;
+      done = true;
+      error = "";
+      log.unshift({e: pretty(expr), r: pretty(text), raw: text});
+      if (log.length > 30) log.length = 30;
+      saveLog();
+      expr = /e/.test(text) ? "" : text.replace("-", "−");
+      renderLog();
+    } catch (err) {
+      error = err.message || "算式有誤";
+    }
+    render();
+  }
+
+  function backspace(){
+    error = "";
+    if (done){ done = false; }
+    expr = expr.slice(0, -1);
+    render();
+  }
+
+  function clearAll(){
+    expr = ""; error = ""; done = false; lastExpr = ""; resultText = "";
+    render();
+  }
+
+  function saveLog(){
+    try { localStorage.setItem("calc-log", JSON.stringify(log)); } catch (e) {}
+  }
+
+  function renderLog(){
+    var ul = $("log");
+    ul.textContent = "";
+    $("empty").hidden = log.length > 0;
+    log.forEach(function(item){
+      var li = document.createElement("li");
+      var b = document.createElement("button");
+      b.type = "button";
+      var e = document.createElement("span"); e.className = "e"; e.textContent = item.e + " =";
+      var r = document.createElement("span"); r.className = "r"; r.textContent = item.r;
+      b.appendChild(e); b.appendChild(r);
+      b.addEventListener("click", function(){
+        if (/e/.test(item.raw)) return;
+        expr = item.raw.replace("-", "−");
+        done = false; error = "";
+        render();
+      });
+      li.appendChild(b);
+      ul.appendChild(li);
+    });
+  }
+
+  function press(k){
+    if (k === "C") clearAll();
+    else if (k === "⌫") backspace();
+    else if (k === "=") equals();
+    else input(k);
+  }
+
+  $("keys").addEventListener("click", function(e){
+    var b = e.target.closest("button[data-k]");
+    if (b) press(b.getAttribute("data-k"));
+  });
+
+  var KEYMAP = {"*":"×","x":"×","X":"×","/":"÷","-":"−","Enter":"=","=":"=","Backspace":"⌫","Escape":"C","Delete":"C","c":"C","C":"C"};
+  document.addEventListener("keydown", function(e){
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    var k = KEYMAP[e.key] || (/^[0-9+().%]$/.test(e.key) ? e.key : null);
+    if (!k) return;
+    e.preventDefault();
+    press(k);
+  });
+
+  $("clearLog").addEventListener("click", function(){
+    log = []; saveLog(); renderLog();
+  });
+
+  var msgTimer = null;
+  function say(t){
+    $("msg").textContent = t;
+    clearTimeout(msgTimer);
+    msgTimer = setTimeout(function(){ $("msg").textContent = ""; }, 2000);
+  }
+  $("copy").addEventListener("click", function(){
+    var text = done ? resultText : (function(){ var v = tryEval(); return v === null ? "" : formatNum(v); })();
+    if (!text){ say("目前沒有可複製的結果"); return; }
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(function(){ say("已複製 " + text); })
+        .catch(function(){ say("無法複製，請手動選取結果"); });
+    } else {
+      say("無法複製，請手動選取結果");
+    }
+  });
+
+  renderLog();
+  render();
+})();
+</script>
+</body>
+</html>
