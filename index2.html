@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>房源整合工具</title>
+<style>
+/* Layout: 單欄工作流程。① 加入資料來源 → ② 對應欄位 → ③ 整合結果與匯出 */
+:root{
+  --bg:#f3f5f6; --surface:#ffffff; --fg:#14232e; --muted:#5b6b76; --line:#d9e1e5;
+  --accent:#0d7a78; --accent-fg:#ffffff; --accent-soft:#dff0ef; --warn:#a85d00; --warn-soft:#fdf0d9; --bad:#b3361d;
+  --font:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e171c; --surface:#16232a; --fg:#e7eff2; --muted:#9fb1ba; --line:#27373f;
+    --accent:#3fb5b2; --accent-fg:#06201f; --accent-soft:#183a3b; --warn:#f0b35a; --warn-soft:#3a2d14; --bad:#ff8a6e;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e171c; --surface:#16232a; --fg:#e7eff2; --muted:#9fb1ba; --line:#27373f;
+  --accent:#3fb5b2; --accent-fg:#06201f; --accent-soft:#183a3b; --warn:#f0b35a; --warn-soft:#3a2d14; --bad:#ff8a6e;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.65}
+.wrap{max-width:1120px;margin:0 auto;padding-inline:max(16px,env(safe-area-inset-left,0px)) max(16px,env(safe-area-inset-right,0px));padding-block:24px 56px}
+h1{font-size:26px;margin:0 0 4px}
+h2{font-size:18px;margin:0 0 4px}
+.lead{color:var(--muted);margin:0 0 20px;max-width:46em}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+.head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.btn{height:40px;border:0;border-radius:8px;background:var(--accent);color:var(--accent-fg);font-weight:700;padding:0 16px;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+.btn.small{height:32px;padding:0 10px;font-size:13px}
+.btn.danger{background:transparent;color:var(--bad);border:1px solid var(--bad)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:10px}
+.field{display:flex;flex-direction:column;gap:3px;min-width:0}
+.field label{font-size:12px;color:var(--muted)}
+.field select,.field input,textarea{border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:6px 10px;min-height:38px;width:100%;min-width:0}
+textarea{font-family:var(--mono);font-size:12px;min-height:88px;resize:vertical}
+.source{border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px;background:var(--bg)}
+.source .top{display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:10px}
+.source .top .field{flex:1 1 160px}
+.chip{display:inline-block;font-size:12px;padding:1px 8px;border-radius:99px;background:var(--accent-soft);color:var(--accent)}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}
+details{margin-top:10px}
+summary{cursor:pointer;color:var(--accent);font-size:14px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px}
+.stat{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--bg)}
+.stat b{display:block;font-size:24px;font-variant-numeric:tabular-nums}
+.stat span{font-size:12px;color:var(--muted)}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{padding:6px 10px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{background:var(--bg);color:var(--muted);font-weight:500;position:sticky;top:0}
+td.wrapcell{white-space:normal;min-width:160px}
+.note{font-size:13px;color:var(--muted)}
+.msg{margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--accent-soft)}
+.msg.warn{background:var(--warn-soft)}
+.conf{margin:12px 0 0;padding:10px 12px;border-radius:8px;background:var(--warn-soft);font-size:13px}
+.conf li{margin:2px 0}
+.foot{font-size:12px;color:var(--muted);margin-top:24px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <div>
+      <h1>房源整合工具</h1>
+      <p class="lead" style="margin:0">把不同來源的物件資料（CSV 或 JSON）轉成同一種格式，自動換算單位、去除重複，再匯出。資料只在你的瀏覽器內處理，不會上傳。</p>
+    </div>
+    <button class="btn ghost small" id="themeBtn" type="button">切換深淺色</button>
+  </div>
+
+  <section class="panel" aria-labelledby="s1">
+    <div class="head">
+      <div><h2 id="s1">① 資料來源</h2><div class="note">每個來源貼上或上傳一份檔案。請只使用你有權使用的資料，例如自家案源、合作夥伴提供的授權資料檔。</div></div>
+      <div class="row">
+        <button class="btn ghost" type="button" id="sampleBtn">載入範例資料</button>
+        <button class="btn" type="button" id="addBtn">新增來源</button>
+      </div>
+    </div>
+    <div id="sources"></div>
+    <div id="srcMsg" class="msg warn" hidden role="status"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="s3">
+    <div class="head">
+      <div><h2 id="s3">② 整合結果</h2><div class="note">同縣市、行政區、路名、樓層、總樓層、權狀坪數（以 0.5 坪為單位）與房數相同的物件視為同一間。</div></div>
+      <button class="btn" type="button" id="runBtn">開始整合</button>
+    </div>
+    <div id="result"><div class="note">尚未整合。新增來源並確認欄位對應後，按「開始整合」。</div></div>
+  </section>
+
+  <p class="foot">統一欄位：來源、來源編號、標題、縣市、行政區、路名（已去除門牌）、型態、總價（萬）、權狀坪數、單價（萬/坪）、格局、屋齡、樓層、總樓層、車位、管理費（元/月）、描述、更新時間、所有來源。</p>
+</div>
+
+<script>
+//#PURE-START
+const M2_PER_PING=3.3058;
+const FIELDS=[
+ ["source_id","物件編號",/編號|(^|_)id$|^id$|^no$/i],
+ ["title","標題",/標題|名稱|title|name/i],
+ ["city","縣市",/縣市|city/i],
+ ["district","行政區",/行政區|區域|district/i],
+ ["road","路名／地址",/路名|地址|street|address|road/i],
+ ["type","型態",/型態|類型|type|category/i],
+ ["price","總價",/總價|價格|price/i],
+ ["area","權狀坪數／面積",/權狀|坪數|面積|area|ping/i],
+ ["layout","格局",/格局|房|layout/i],
+ ["age","屋齡",/屋齡|age/i],
+ ["floor","樓層",/樓層|floor/i],
+ ["parking","車位",/車位|park/i],
+ ["mgmt","管理費",/管理費|mgmt/i],
+ ["desc","特色／描述",/特色|描述|說明|desc/i],
+ ["updated","更新時間",/更新|updated|date/i]
+];
+const TYPE_MAP=[["電梯大樓","電梯大樓"],["住宅大樓","電梯大樓"],["大樓","電梯大樓"],["華廈","華廈"],["公寓","公寓"],["透天","透天"],["別墅","透天"],["套房","套房"],["店面","店面"],["土地","土地"]];
+
+function num(s){const m=String(s??"").match(/-?\d[\d,]*\.?\d*/);return m?parseFloat(m[0].replace(/,/g,"")):null}
+function parsePrice(s,def){ // 回傳「萬」
+  s=String(s??"");const v=num(s);if(v===null)return null;
+  if(s.includes("億"))return v*10000;
+  if(s.includes("萬"))return v;
+  if(def==="元")return v/10000;
+  if(def==="萬")return v;
+  return v>=1e6?v/1e4:v;
+}
+function parseArea(s,def){ // 回傳「坪」
+  s=String(s??"");let v=num(s);if(v===null)return null;
+  if(/㎡|m2|m²|平方公尺|平方米/i.test(s))v/=M2_PER_PING;
+  else if(!s.includes("坪")&&def==="㎡")v/=M2_PER_PING;
+  return Math.round(v*100)/100;
+}
+function parseLayout(s){
+  s=String(s??"");
+  let m=s.match(/(\d+)\s*[房室]\D*?(\d+)\s*廳\D*?(\d+)\s*衛/);
+  if(m)return[+m[1],+m[2],+m[3]];
+  m=s.match(/^\s*(\d+)\s*[\/／-]\s*(\d+)\s*[\/／-]\s*(\d+)\s*$/);
+  if(m)return[+m[1],+m[2],+m[3]];
+  m=s.match(/(\d+)\s*[房室]/);
+  return m?[+m[1],null,null]:[null,null,null];
+}
+function parseFloor(s){
+  s=String(s??"");
+  let m=s.match(/(\d+)\s*[Ff樓]?\s*[\/／]\s*(?:共)?(\d+)/);
+  if(m)return[+m[1],+m[2]];
+  m=s.match(/(?:地上|共)\s*(\d+)/);
+  return m?[null,+m[1]]:[null,null];
+}
+function parseParking(s){
+  s=String(s??"").trim();
+  if(!s||s.includes("無"))return["無",0];
+  const t=s.includes("平面")?"平面":s.includes("機械")?"機械":"其他";
+  return[t,Math.round(num(s)||1)];
+}
+function normType(s){s=String(s??"").trim();for(const[k,v]of TYPE_MAP)if(s.includes(k))return v;return s}
+function normCity(s){return String(s??"").replace(/臺/g,"台").trim()}
+function cleanRoad(road,city,district){
+  let r=String(road??"").replace(/臺/g,"台");
+  if(city)r=r.replace(city,"");
+  if(district)r=r.replace(district,"");
+  return r.replace(/\d+號.*$/,"").replace(/\d+樓.*$/,"").trim();
+}
+function normalize(raw,src){
+  const g=k=>src.mapping[k]?raw[src.mapping[k]]:"";
+  const [rooms,halls,baths]=parseLayout(g("layout"));
+  const [floor,floorsTotal]=parseFloor(g("floor"));
+  const [pType,pCount]=parseParking(g("parking"));
+  const city=normCity(g("city")),district=String(g("district")??"").trim();
+  const L={
+    source:src.name,source_id:String(g("source_id")??"").trim(),title:String(g("title")??"").trim(),
+    city,district,road:cleanRoad(g("road"),city,district),type:normType(g("type")),
+    price_wan:parsePrice(g("price"),src.priceUnit),ping_total:parseArea(g("area"),src.areaUnit),
+    rooms,halls,baths,age_years:num(g("age")),floor,floors_total:floorsTotal,
+    parking_type:pType,parking_count:pCount,mgmt_fee_month:Math.round(num(g("mgmt"))||0),
+    description:String(g("desc")??"").trim(),updated_at:String(g("updated")??"").trim()
+  };
+  L.sources=[[src.name,L.source_id]];
+  return L;
+}
+function unitPrice(L){return L.price_wan&&L.ping_total?Math.round(L.price_wan/L.ping_total*100)/100:null}
+function dedupeKey(L){
+  if(!(L.city&&L.district&&L.road&&L.ping_total&&L.rooms))return"uniq:"+L.source+":"+L.source_id+":"+Math.random();
+  return[L.city,L.district,L.road,L.floor,L.floors_total,Math.round(L.ping_total*2)/2,L.rooms].join("|");
+}
+function merge(list){
+  const groups=new Map(),conflicts=[];
+  for(const L of list){const k=dedupeKey(L);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(L)}
+  const out=[];
+  for(const[k,items]of groups){
+    items.sort((a,b)=>String(b.updated_at).localeCompare(String(a.updated_at)));
+    const base=items[0];
+    for(const o of items.slice(1)){
+      for(const f of Object.keys(o)){
+        if(f==="sources")continue;
+        const bv=base[f],ov=o[f];
+        if((bv===null||bv===""||bv===0)&&!(ov===null||ov===""||ov===0))base[f]=ov;
+      }
+      base.sources.push(...o.sources);
+      if(base.price_wan&&o.price_wan&&Math.abs(base.price_wan-o.price_wan)/base.price_wan>0.03)
+        conflicts.push({title:base.title||base.road,kept:base.price_wan,other:o.price_wan,source:o.source});
+    }
+    out.push(base);
+  }
+  return{merged:out,conflicts};
+}
+function parseCSV(t){
+  t=t.replace(/^\uFEFF/,"");
+  const rows=[];let r=[],c="",q=false;
+  for(let i=0;i<t.length;i++){
+    const ch=t[i];
+    if(q){if(ch==='"'){if(t[i+1]==='"'){c+='"';i++}else q=false}else c+=ch}
+    else if(ch==='"')q=true;
+    else if(ch===","){r.push(c);c=""}
+    else if(ch==="\n"){r.push(c);rows.push(r);r=[];c=""}
+    else if(ch!=="\r")c+=ch;
+  }
+  if(c!==""||r.length){r.push(c);rows.push(r)}
+  const h=(rows.shift()||[]).map(x=>x.trim());
+  return rows.filter(x=>x.some(v=>v!=="")).map(x=>Object.fromEntries(h.map((k,i)=>[k,x[i]??""])));
+}
+function parseText(t){
+  t=String(t).trim();
+  if(!t)return[];
+  if(t[0]==="["||t[0]==="{"){
+    const j=JSON.parse(t);
+    const arr=Array.isArray(j)?j:(j.data||j.items||j.listings||j.results||[]);
+    return arr.map(o=>Object.fromEntries(Object.entries(o).map(([k,v])=>[k,typeof v==="object"&&v!==null?JSON.stringify(v):v])));
+  }
+  return parseCSV(t);
+}
+function guessMapping(headers){
+  const used=new Set(),m={};
+  for(const[key,,re]of FIELDS){
+    const h=headers.find(x=>!used.has(x)&&re.test(x));
+    if(h){m[key]=h;used.add(h)}
+  }
+  return m;
+}
+//#PURE-END
+
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt=n=>n===null||n===undefined?"":Number(n).toLocaleString("zh-TW",{maximumFractionDigits:2});
+let sources=[],seq=0,lastResult=null;
+
+function addSource(name,text,opts={}){
+  const s={id:++seq,name:name||("來源"+(seq)),text:text||"",rows:[],headers:[],mapping:{},priceUnit:opts.priceUnit||"auto",areaUnit:opts.areaUnit||"坪",error:""};
+  sources.push(s);
+  if(text)reparse(s);
+  renderSources();
+  return s;
+}
+function reparse(s){
+  s.error="";
+  try{
+    s.rows=parseText(s.text);
+    s.headers=s.rows.length?Object.keys(s.rows[0]):[];
+    s.mapping=guessMapping(s.headers);
+  }catch(e){s.rows=[];s.headers=[];s.mapping={};s.error="無法解析內容，請確認是 CSV 或 JSON 陣列。"}
+}
+function renderSources(){
+  const box=$("#sources");
+  if(!sources.length){box.innerHTML='<div class="note">還沒有來源。按「新增來源」，或載入範例資料看看效果。</div>';return}
+  box.innerHTML=sources.map(s=>`
+   <div class="source" data-id="${s.id}">
+     <div class="top">
+       <div class="field"><label for="n${s.id}">來源名稱</label><input id="n${s.id}" data-k="name" value="${esc(s.name)}"></div>
+       <div class="field"><label for="p${s.id}">價格無單位時視為</label>
+         <select id="p${s.id}" data-k="priceUnit">
+           <option value="auto"${s.priceUnit==="auto"?" selected":""}>自動判斷</option>
+           <option value="萬"${s.priceUnit==="萬"?" selected":""}>萬元</option>
+           <option value="元"${s.priceUnit==="元"?" selected":""}>元</option></select></div>
+       <div class="field"><label for="a${s.id}">面積無單位時視為</label>
+         <select id="a${s.id}" data-k="areaUnit">
+           <option value="坪"${s.areaUnit==="坪"?" selected":""}>坪</option>
+           <option value="㎡"${s.areaUnit==="㎡"?" selected":""}>平方公尺</option></select></div>
+       <div class="field"><label for="e${s.id}">檔案編碼</label>
+         <select id="e${s.id}" data-k="enc"><option value="utf-8">UTF-8</option><option value="big5">Big5（舊版 Excel）</option></select></div>
+       <div class="field"><label for="f${s.id}">上傳檔案</label><input id="f${s.id}" data-k="file" type="file" accept=".csv,.json,.txt"></div>
+       <button class="btn danger small" type="button" data-act="del">移除</button>
+     </div>
+     <div class="field"><label for="t${s.id}">或直接貼上 CSV／JSON</label>
+       <textarea id="t${s.id}" data-k="text" placeholder="第一列為欄位名稱的 CSV，或物件陣列的 JSON">${esc(s.text)}</textarea></div>
+     <div class="row" style="margin-top:8px">
+       <span class="chip">${s.rows.length} 筆</span>
+       ${s.error?`<span class="chip warn">${esc(s.error)}</span>`:""}
+       ${s.rows.length&&!s.mapping.price?'<span class="chip warn">找不到總價欄位，請在下方指定</span>':""}
+     </div>
+     ${s.headers.length?`<details open><summary>欄位對應（已自動判斷，可修改）</summary>
+       <div class="grid" style="margin-top:10px">${FIELDS.map(([k,label])=>`
+         <div class="field"><label for="m${s.id}${k}">${label}</label>
+           <select id="m${s.id}${k}" data-map="${k}"><option value="">（無）</option>
+           ${s.headers.map(h=>`<option${s.mapping[k]===h?" selected":""}>${esc(h)}</option>`).join("")}</select></div>`).join("")}</div></details>`:""}
+   </div>`).join("");
+}
+$("#sources").addEventListener("change",e=>{
+  const el=e.target,box=el.closest(".source");if(!box)return;
+  const s=sources.find(x=>x.id===+box.dataset.id);
+  if(el.dataset.map){s.mapping[el.dataset.map]=el.value;return}
+  const k=el.dataset.k;
+  if(k==="name"||k==="priceUnit"||k==="areaUnit"){s[k]=el.value;return}
+  if(k==="text"){s.text=el.value;reparse(s);renderSources();return}
+  if(k==="file"&&el.files[0]){
+    const enc=box.querySelector('[data-k="enc"]').value;
+    el.files[0].arrayBuffer().then(buf=>{
+      s.text=new TextDecoder(enc).decode(buf);
+      if(!s.name||/^來源\d+$/.test(s.name))s.name=el.files[0].name.replace(/\.[^.]+$/,"");
+      reparse(s);renderSources();
+    });
+  }
+});
+$("#sources").addEventListener("click",e=>{
+  if(e.target.dataset.act==="del"){
+    const id=+e.target.closest(".source").dataset.id;
+    sources=sources.filter(x=>x.id!==id);renderSources();
+  }
+});
+$("#addBtn").addEventListener("click",()=>addSource("",""));
+
+const SAMPLE_A=`物件編號,標題,縣市,行政區,路名,型態,總價,權狀坪數,格局,屋齡,樓層,座向,車位,管理費,特色,更新時間
+A-1001,敦南悅境 三房平車,臺北市,大安區,敦化南路二段,電梯大樓,"4,280萬",42.6坪,3房2廳2衛,8年,11/18樓,座北朝南,平面車位 1 個,"3,800元",近捷運,2026-11-18
+A-1002,中山靜巷美寓,臺北市,中山區,林森北路,華廈,2380萬,28.4坪,2房1廳1衛,27年,4/6樓,座南朝北,無,1200元,低總價,2026-11-17
+A-1003,板橋新埔之森,新北市,板橋區,文化路一段,電梯大樓,1980萬,36.8坪,3房2廳2衛,6年,16/25樓,座西南,平面車位 1 個,2400元,有車位,2026-11-16`;
+const SAMPLE_B=JSON.stringify([
+ {id:"B-77",name:"敦南悅境",city:"台北市",district:"大安區",street:"敦化南路二段88號",category:"大樓",price_twd:"42800000",area_m2:"140.8",layout:"3/2/2",building_age:"8",floor:"11F/18F",parking:"平面1",mgmt_fee:"3800",desc:"客餐廳連通",updated:"2026-11-19"},
+ {id:"B-78",name:"永和樂華老公寓",city:"新北市",district:"永和區",street:"永和路二段120號",category:"公寓",price_twd:"11800000",area_m2:"80.3",layout:"2房1廳1衛",building_age:"38",floor:"3F/5F",parking:"無",mgmt_fee:"0",desc:"需部分翻新",updated:"2026-11-15"},
+ {id:"B-79",name:"板橋新埔之森",city:"新北市",district:"板橋區",street:"文化路一段",category:"大樓",price_twd:"20900000",area_m2:"121.7",layout:"3/2/2",building_age:"6",floor:"16F/25F",parking:"平面1",mgmt_fee:"2400",desc:"社區有共讀空間",updated:"2026-11-12"}
+],null,1);
+$("#sampleBtn").addEventListener("click",()=>{
+  sources=[];seq=0;
+  addSource("來源A（CSV）",SAMPLE_A);
+  addSource("來源B（JSON）",SAMPLE_B,{priceUnit:"元",areaUnit:"㎡"});
+});
+
+function run(){
+  const msg=$("#srcMsg");msg.hidden=true;
+  const active=sources.filter(s=>s.rows.length);
+  if(!active.length){msg.hidden=false;msg.textContent="請先新增至少一個有資料的來源。";return}
+  const bad=active.filter(s=>!s.mapping.price||!s.mapping.area);
+  if(bad.length){msg.hidden=false;msg.textContent=`「${bad.map(s=>s.name).join("、")}」還沒指定總價或面積欄位，請在欄位對應中選擇。`;return}
+  const all=active.flatMap(s=>s.rows.map(r=>normalize(r,s)));
+  const {merged,conflicts}=merge(all);
+  lastResult={all,merged,conflicts};
+  renderResult();
+}
+$("#runBtn").addEventListener("click",run);
+
+const COLS=[
+ ["來源",L=>L.sources.map(x=>x[0]).join("＋")],["標題",L=>L.title,"wrapcell"],["縣市",L=>L.city],["行政區",L=>L.district],["路名",L=>L.road],
+ ["型態",L=>L.type],["總價(萬)",L=>fmt(L.price_wan)],["權狀坪",L=>fmt(L.ping_total)],["單價(萬/坪)",L=>fmt(unitPrice(L))],
+ ["格局",L=>L.rooms?`${L.rooms}房${L.halls??"?"}廳${L.baths??"?"}衛`:""],["屋齡",L=>fmt(L.age_years)],
+ ["樓層",L=>L.floor||L.floors_total?`${L.floor??"-"}/${L.floors_total??"-"}`:""],["車位",L=>L.parking_count?`${L.parking_type}${L.parking_count}`:"無"],
+ ["管理費",L=>fmt(L.mgmt_fee_month)],["更新",L=>L.updated_at]
+];
+function renderResult(){
+  const {all,merged,conflicts}=lastResult;
+  const multi=merged.filter(L=>L.sources.length>1).length;
+  $("#result").innerHTML=`
+   <div class="stats">
+     <div class="stat"><b>${all.length}</b><span>輸入筆數</span></div>
+     <div class="stat"><b>${merged.length}</b><span>整合後物件</span></div>
+     <div class="stat"><b>${all.length-merged.length}</b><span>移除重複</span></div>
+     <div class="stat"><b>${multi}</b><span>多來源共同物件</span></div>
+     <div class="stat"><b>${conflicts.length}</b><span>價格衝突</span></div>
+   </div>
+   ${conflicts.length?`<div class="conf"><b>價格差異超過 3% 的物件（已保留最新更新的價格，請人工確認）</b><ul>${conflicts.map(c=>`<li>${esc(c.title)}：採用 ${fmt(c.kept)} 萬，${esc(c.source)} 為 ${fmt(c.other)} 萬</li>`).join("")}</ul></div>`:""}
+   <div class="row" style="margin:12px 0">
+     <button class="btn" type="button" id="dlJson">下載 JSON</button>
+     <button class="btn" type="button" id="dlCsv">下載 CSV</button>
+     <button class="btn ghost" type="button" id="cpJson">複製 JSON</button>
+     <span class="note" id="exMsg" role="status"></span>
+   </div>
+   <div class="tablewrap"><table><thead><tr>${COLS.map(c=>`<th>${c[0]}</th>`).join("")}</tr></thead>
+   <tbody>${merged.map(L=>`<tr>${COLS.map(c=>`<td class="${c[2]||""}">${esc(c[1](L))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+  $("#dlJson").onclick=()=>download("listings.json",JSON.stringify(exportRows(),null,2),"application/json");
+  $("#dlCsv").onclick=()=>download("listings.csv","\uFEFF"+toCSV(exportRows()),"text/csv");
+  $("#cpJson").onclick=copyJson;
+}
+function exportRows(){
+  return lastResult.merged.map(L=>({...L,unit_price_wan:unitPrice(L),sources:L.sources.map(x=>x.join(":")).join("|")}));
+}
+function toCSV(rows){
+  if(!rows.length)return"";
+  const keys=Object.keys(rows[0]);
+  const q=v=>{v=v===null||v===undefined?"":String(v);return/[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+  return[keys.join(","),...rows.map(r=>keys.map(k=>q(r[k])).join(","))].join("\n");
+}
+function download(name,text,type){
+  try{
+    const url=URL.createObjectURL(new Blob([text],{type:type+";charset=utf-8"}));
+    const a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    $("#exMsg").textContent="已產生 "+name+"。如果沒有開始下載，請改用「複製 JSON」。";
+  }catch(e){$("#exMsg").textContent="這個環境無法下載，請改用「複製 JSON」。"}
+}
+function copyJson(){
+  const text=JSON.stringify(exportRows(),null,2);
+  const fallback=()=>{
+    const ta=document.createElement("textarea");ta.value=text;ta.style.cssText="position:fixed;left:-9999px";
+    document.body.appendChild(ta);ta.select();
+    let ok=false;try{ok=document.execCommand("copy")}catch(e){}
+    ta.remove();$("#exMsg").textContent=ok?"已複製 JSON。":"無法自動複製，請改用下載。";
+  };
+  if(navigator.clipboard&&navigator.clipboard.writeText)
+    navigator.clipboard.writeText(text).then(()=>{$("#exMsg").textContent="已複製 JSON。"},fallback);
+  else fallback();
+}
+
+$("#themeBtn").addEventListener("click",()=>{
+  const r=document.documentElement,cur=r.getAttribute("data-theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");
+  r.setAttribute("data-theme",cur==="dark"?"light":"dark");
+});
+
+$("#sampleBtn").click();
+run();
+</script>
+</body>
+</html>
